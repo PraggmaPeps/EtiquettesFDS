@@ -29,12 +29,12 @@ PICTOGRAMMES_DANGER = {
 }
 
 
-def extraire_images_pdf(chemin_pdf, page_debut=0, page_fin=2):
+def extraire_images_pdf(pathPDF, page_debut=0, page_fin=2):
     """
     Extraire les images d'un PDF (généralement les pictogrammes sont sur les premières pages)
 
     Args:
-        chemin_pdf: Chemin vers la FDS
+        pathPDF: Chemin vers la FDS
         page_debut: Première page à analyser (0 = première page)
         page_fin: Dernière page à analyser
 
@@ -43,9 +43,9 @@ def extraire_images_pdf(chemin_pdf, page_debut=0, page_fin=2):
     """
     images_extraites = []
 
-    print(f"📄 Extraction des images de {chemin_pdf}...")
+    print(f"📄 Extraction des images de {pathPDF}...")
 
-    with pdfplumber.open(chemin_pdf) as pdf:
+    with pdfplumber.open(pathPDF) as pdf:
         nb_pages = min(len(pdf.pages), page_fin + 1)
 
         for num_page in range(page_debut, nb_pages):
@@ -173,12 +173,12 @@ Réponds UNIQUEMENT au format JSON:
         return None
 
 
-def analyser_fds(chemin_pdf, sauvegarder_images=False):
+def analyser_fds(pathPDF, sauvegarder_images=False):
     """
     Analyser une FDS complète pour extraire tous les pictogrammes
 
     Args:
-        chemin_pdf: Chemin vers la FDS
+        pathPDF: Chemin vers la FDS
         sauvegarder_images: Si True, sauvegarde les images extraites
 
     Returns:
@@ -189,7 +189,7 @@ def analyser_fds(chemin_pdf, sauvegarder_images=False):
     logging.debug("=" * 70)
 
     # Extraire les images
-    images = extraire_images_pdf(chemin_pdf, page_debut=0, page_fin=3)
+    images = extraire_images_pdf(pathPDF, page_debut=0, page_fin=3)
 
     if not images:
         logging.debug("⚠️  Aucune image trouvée dans le PDF")
@@ -242,14 +242,14 @@ def analyser_fds(chemin_pdf, sauvegarder_images=False):
     return pictogrammes_identifies
 
 
-def generer_rapport(pictogrammes, chemin_pdf):
+def generer_rapport(pictogrammes, pathPDF):
     """
     Générer un rapport des pictogrammes identifiés
     """
     print("\n" + "=" * 70)
     print("📋 RAPPORT D'ANALYSE")
     print("=" * 70)
-    print(f"\nFichier analysé: {chemin_pdf}")
+    print(f"\nFichier analysé: {pathPDF}")
     print(f"Nombre de pictogrammes identifiés: {len(pictogrammes)}")
 
     if pictogrammes:
@@ -262,11 +262,11 @@ def generer_rapport(pictogrammes, chemin_pdf):
             print(f"    Page: {picto['page']}")
 
         # Sauvegarder le rapport
-        nom_rapport = Path(chemin_pdf).stem + "_rapport_pictogrammes.txt"
+        nom_rapport = Path(pathPDF).stem + "_rapport_pictogrammes.txt"
         with open(nom_rapport, 'w', encoding='utf-8') as f:
             f.write(f"RAPPORT D'ANALYSE - PICTOGRAMMES DE DANGER\n")
             f.write(f"=" * 70 + "\n\n")
-            f.write(f"Fichier: {chemin_pdf}\n")
+            f.write(f"Fichier: {pathPDF}\n")
             f.write(f"Nombre de pictogrammes: {len(pictogrammes)}\n\n")
             f.write(f"DANGERS IDENTIFIÉS:\n")
             f.write("-" * 70 + "\n\n")
@@ -293,19 +293,19 @@ def main():
         print("  python fds_pictogrammes.py ma_fiche_securite.pdf --save-images")
         sys.exit(1)
 
-    chemin_pdf = sys.argv[1]
+    pathPDF = sys.argv[1]
     sauvegarder_images = '--save-images' in sys.argv
 
     # Vérifier que le fichier existe
-    if not Path(chemin_pdf).exists():
-        print(f"❌ Fichier non trouvé: {chemin_pdf}")
+    if not Path(pathPDF).exists():
+        print(f"❌ Fichier non trouvé: {pathPDF}")
         sys.exit(1)
 
     # Analyser la FDS
-    pictogrammes = analyser_fds(chemin_pdf, sauvegarder_images)
+    pictogrammes = analyser_fds(pathPDF, sauvegarder_images)
 
     # Générer le rapport
-    generer_rapport(pictogrammes, chemin_pdf)
+    generer_rapport(pictogrammes, pathPDF)
 
     print("\n✨ Analyse terminée!\n")
 

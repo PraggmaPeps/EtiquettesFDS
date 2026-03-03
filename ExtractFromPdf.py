@@ -2,21 +2,16 @@
 """
 Script d'extraction de texte depuis un PDF avec pdfplumber
 """
-from itertools import filterfalse
-from lib2to3.pgen2.tokenize import group
-from xmlrpc.client import Boolean
-
-import pdfplumber
+import os
 import re
 import sys
 from pathlib import Path
+from config import config
+import pdfplumber
 
-from numpy.lib.recfunctions import join_by
-from pandas import pivot
+from Excel_utils import get_column_index
 
 from ExcelToDict import excel_to_dict
-from ExtractPictoFromPdf import analyser_fds
-import logging
 from openpyxl import load_workbook
 from openpyxl import Workbook
 from setup_logger import setup_logger
@@ -29,19 +24,19 @@ from ExtractPictoFromPdf import analyser_fds
 MAX_PAGES_TO_SCAN = 50
 MIN_LINES_WITHOUT_INFORMATIONS = 10
 #To call external API to recognize picto from pictures
-RECOGNIZE_PICTURES=True
-pathMention="Datas/MentionLegales.xlsx"
-pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
+
 
 dictMention = {}
+mentionInFile= {}
 
 
-def extraire_texte_pdf(chemin_pdf):
+def extraire_texte_pdf(pathPDF):
+    global mentionInFile
     """
     Extrait tout le texte d'un PDF
 
     Args:
-        chemin_pdf: Chemin vers le fichier PDF
+        pathPDF: Chemin vers le fichier PDF
 
     Returns:
         str: Texte extrait du PDF
@@ -49,7 +44,7 @@ def extraire_texte_pdf(chemin_pdf):
     texte_complet = []
     logger.debug("extraire_texte_pdf......")
     try:
-        with pdfplumber.open(chemin_pdf) as pdf:
+        with pdfplumber.open(pathPDF) as pdf:
             logger.debug(f"📄 Nombre de pages: {len(pdf.pages)}")
             numParaph=''
             interest = False
@@ -65,6 +60,8 @@ def extraire_texte_pdf(chemin_pdf):
             complements = []
             prudences = []
             contients = []
+            mentionInFile = {}
+            last_prudence = ""
             avertissement=''
             transport=''
             # Parcourir toutes les pages
@@ -89,8 +86,6 @@ def extraire_texte_pdf(chemin_pdf):
                             numParaph=re.sub(r'\.$','',numParaph)
                             numParaph = re.sub(r'[^0-9\.]', '', numParaph)
                             numParaph = re.sub(r'^[^0-9]', '', numParaph)
-                        logger.debug(f"================numParaph {numParaph}=====================")
-
                         if (numParaph == '14.2'):
                             logger.debug(f"interestTransport False due to :{ligne}")
                             interestTransport = False
@@ -134,6 +129,16 @@ def extraire_texte_pdf(chemin_pdf):
                                 avertissement=x.group(1)
                                 if (y := re.search(r': *(.*)',avertissement)):
                                     avertissement = y.group(1)
+                            elif (x := re.search("d'avertissement(.*)", ligne)):
+                                logger.debug(f"Seen <d'avertissemnt> alone in {ligne}")
+                                avertissement=x.group(1)
+                                if (y := re.search(r': *([^ ]+)',avertissement)):
+                                    avertissement = y.group(1)
+                                    logger.debug(f"avertissemnt <{avertissement}> found in {ligne}")
+                                else:
+                                    logger.debug(f"search avertissemnt in prevligne {prevLine}")
+                                    if (y := re.search(r'Mention([ -:]+)(.+)',prevLine)):
+                                        avertissement = y.group(2)
                             if (x := re.search("danger", ligne)):
                                 interestDanger=MIN_LINES_WITHOUT_INFORMATIONS
                             if (interestDanger):
@@ -195,8 +200,12 @@ def extraire_texte_pdf(chemin_pdf):
                                         if not toadd in prudences:
                                             prudences.append(toadd)
                                             logger.debug(f"toadd : {toadd}")
+                                            last_prudence = toadd
+                                    mentionInFile[last_prudence] = ligne
                                     interestPrudence=MIN_LINES_WITHOUT_INFORMATIONS
                                 else:
+                                    if last_prudence:
+                                        mentionInFile[last_prudence]+= ligne
                                     interestPrudence-=1
                         prevLine=ligne
                     else:
@@ -205,6 +214,8 @@ def extraire_texte_pdf(chemin_pdf):
                 else:
                     logger.warning(f"⚠️  Aucun texte trouvé sur la page {num_page}")
             logger.debug(f"Pictos {pictos}, avertissement \"{avertissement}\" dangers {dangers} complements {complements} prudence {prudences}")
+            for key, value in mentionInFile.items():
+                print(f"{key} : {value}")
             return {
                 'pictos' : pictos,
                 'contients' : contients,
@@ -216,13 +227,11 @@ def extraire_texte_pdf(chemin_pdf):
             }
 
     except FileNotFoundError:
-        logger.error(f"❌ Erreur: Le fichier '{chemin_pdf}' n'existe pas")
+        logger.error(f"❌ Erreur: Le fichier '{pathPDF}' n'existe pas")
         return None
     except Exception as e:
         logger.error(f"❌ Erreur lors de l'extraction: {e}")
         return None
-
-
 def clean_mention(mentions):
     results=[]
     nbMentions=len(mentions)
@@ -236,12 +245,12 @@ def clean_mention(mentions):
             results.insert(0,lastMention)
     return(results)
 
-def extraire_tableaux_pdf(chemin_pdf):
+def extraire_tableaux_pdf(pathPDF):
     """
     Extrait les tableaux d'un PDF
 
     Args:
-        chemin_pdf: Chemin vers le fichier PDF
+        pathPDF: Chemin vers le fichier PDF
 
     Returns:
         list: Liste des tableaux extraits
@@ -249,7 +258,7 @@ def extraire_tableaux_pdf(chemin_pdf):
     tous_tableaux = []
 
     try:
-        with pdfplumber.open(chemin_pdf) as pdf:
+        with pdfplumber.open(pathPDF) as pdf:
             for num_page, page in enumerate(pdf.pages, start=1):
                 tableaux = page.extract_tables()
 
@@ -264,10 +273,67 @@ def extraire_tableaux_pdf(chemin_pdf):
         return []
 
 
-def write_fds(fds, sheetName):
-    logger.debug('write_fds....')
+def update_sticker_file(fds , sheetName, fileSticker):
     try:
-        wb = load_workbook(pathFdsExcel)
+        wb = load_workbook(fileSticker)
+    except Exception as e:
+        print(f"Erreur : {e}", file=sys.stderr)
+        sys.exit(1)
+    ws = wb.worksheets[0]
+
+    indexFds = get_column_index(ws, "FDS",exit_now=True)
+    indexDanger = get_column_index(ws, "Mentions de danger",exit_now=True)
+    indexAvertissement = get_column_index(ws, "Mention d'avertissement",exit_now=True)
+    indexPrudence = get_column_index(ws, "Conseils de prudence",exit_now=True)
+    indexContient = get_column_index(ws, "Contient",exit_now=True)
+
+    for i in range(2, ws.max_row + 1):
+        rowfdsname = ws.cell(row=i, column=indexFds + 1).value
+        logger.debug(f"Try to recognize{sheetName} in {rowfdsname}")
+        if (ws.cell(row=i, column=indexFds + 1).value == sheetName):
+            if ('pictos' in fds):
+                j=1
+                for picto in fds['pictos']:
+                    indexPicto = get_column_index(ws,f"PICTO {j}",exit_now=True)
+                    ws.cell(i, indexPicto + 1 ).value = picto
+                    j = j + 1
+
+            avertissement= ''
+            if 'avertissement' in fds:
+                avertissement =  fds['avertissement']
+            ws.cell(row=i, column=indexAvertissement + 1).value = avertissement
+
+            mentionDanger = ''
+            if ('dangers' in fds):
+                sep = ''
+                for danger in fds['dangers']:
+                    mentionDanger = sep + mentionDanger + danger + " " + dictMention[danger]
+                    sep = ' '
+            ws.cell(row=i, column=indexDanger + 1).value = mentionDanger
+
+            mentionPrudence = ''
+            if ('prudences' in fds):
+                sep = ''
+                for prudence in fds['prudences']:
+                    mentionToApply = fromFileifVar(prudence)
+                    mentionPrudence = sep + mentionPrudence + prudence + " " + mentionToApply
+                    sep = ' '
+            ws.cell(row=i, column=indexPrudence + 1).value = mentionPrudence
+
+            mentionContient = ''
+            if ('contients' in fds):
+                sep = ''
+                for contient in fds['contients']:
+                    mentionContient = sep + mentionContient + contient
+                    sep = ' '
+
+            ws.cell(row=i, column=indexContient + 1).value = mentionContient
+
+    wb.save(fileSticker)
+def write_fds(fds , sheetName):
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        wb = load_workbook(os.path.join(script_dir,config['PATH']['pathFdsExcel']))
     except Exception as e:
         wb=Workbook()
     if (sheetName in wb.sheetnames):
@@ -328,7 +394,27 @@ def write_fds(fds, sheetName):
                 ws['B' + str(currentLine)] = dictMention[complement]
             currentLine += 1
 
-    wb.save(pathFdsExcel)
+    wb.save(config['PATH']['pathFdsExcel'])
+def fromFileifVar(code):
+    global mentionInFile
+    result = dictMention[code]
+    if not '…' in result:
+        return result
+    if (not code in mentionInFile):
+        logger.error(f"{code} contains '…'not and not in mentionInFile")
+        return result
+    match = re.search(rf'{code}\s+(.*)', mentionInFile[code])
+    if match:
+        logger.debug(f"{code} in file seems to value {match.group(1)}")
+        result = match.group(1)  # "
+        matchEnd = re.search(r'^([^·]+)·(.*)',result)
+        if matchEnd:
+            logger.debug(f"{code} set to {matchEnd.group(1)}")
+            result = matchEnd.group(1)
+        return result
+    else:
+        logger.error(f"{code} contains '…' and code not in {mentionInFile[code]}")
+        return result
 
 def incrementer_section(match):
     """Incrémenter le dernier chiffre d'une section"""
@@ -339,47 +425,55 @@ def incrementer_section(match):
 
 def main():
     """Fonction principale"""
-    # Vérifier les arguments
+
+
     pictogrammes_identifies=[]
 
     if len(sys.argv) < 2:
-        logger.error("Usage: python extract_pdf.py <chemin_pdf> [fichier_sortie.txt]")
+        logger.error("Usage: python extract_pdf.py <pathPDF> [<fichier_etiq.xls>]")
         sys.exit(1)
-    chemin_pdf = sys.argv[1]
-    logger.debug(f"Traitement du fichier PDF....: {chemin_pdf}")
+    pathPDF = sys.argv[1]
+    logger.debug(f"Traitement du fichier PDF....: {pathPDF}")
     global dictMention
-    logger.debug(f"Chargement du distionnaire depuis : {pathMention}")
-    dictMention = excel_to_dict(pathMention)
+    logger.debug(f"Chargement du distionnaire depuis : {config['PATH']['pathMention']}")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    dictMention = excel_to_dict(os.path.join(script_dir,config['PATH']['pathMention']))
 
 
-    fichier_sortie = sys.argv[2] if len(sys.argv) > 2 else "texte_extrait.txt"
+    fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
 
     # Vérifier que le fichier existe
-    if not Path(chemin_pdf).exists():
-        logger.debug(f"❌ Le fichier '{chemin_pdf}' n'existe pas")
+    if not Path(pathPDF).exists():
+        logger.debug(f"❌ Le fichier '{pathPDF}' n'existe pas")
         sys.exit(1)
 
-    logger.debug(f"🚀 Début de l'extraction de: {chemin_pdf}\n")
+    logger.debug(f"🚀 Début de l'extraction de: {pathPDF}\n")
 
     # Extraire le texte
-    results = extraire_texte_pdf(chemin_pdf)
+    results = extraire_texte_pdf(pathPDF)
     if results:
         logger.info(f"\n📝 Extracted: {results}")
         if results['pictos'] == []:
             logger.info("No pictos named ... Try to find out from pictures ")
-            if (RECOGNIZE_PICTURES):
-                pictogrammes_identifies = analyser_fds(chemin_pdf)
+            if (config['SETTINGS']['RECOGNIZE_PICTURES']):
+                pictogrammes_identifies = analyser_fds(pathPDF)
             for picto in pictogrammes_identifies:
                 logger.info(f"picto from imùage {picto}")
                 if picto['code'] not in results['pictos']:
                     results['pictos'].append(picto['code'])
 
         logger.info(f"\n📝 Final: {results}")
-        sheetName='tmp'
-        if (x := re.search("FDS (.*)\.[PDF|pdf]", chemin_pdf)):
+        sheetName=''
+        if (x := re.search("(.*)\.[PDF|pdf]", os.path.basename(pathPDF))):
             sheetName=x.group(1)
-        write_fds(results,sheetName)
-
+        #SI nom de fichie etiquette positionnée on va mettre à jour toutes les lignes qui font référence à ce FDS
+        # Sinon on va créer un onglet dans pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
+        if fileSticker and not fileSticker == "":
+            logger.debug(f"Report fds in file etiquette {fileSticker}")
+            update_sticker_file(results, sheetName, fileSticker)
+        else:
+            logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATH']['pathFdsExcel']}")
+            write_fds(results,sheetName)
     else:
         logger.error("❌ Aucun texte n'a pu être extrait")
         sys.exit(1)
