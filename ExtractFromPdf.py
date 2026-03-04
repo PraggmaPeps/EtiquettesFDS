@@ -452,7 +452,7 @@ def main():
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
-    key_tmp = sys.argv[3] if len(sys.argv) > 2 else config['SETTINGS']['suffixe_tmp']
+    key_tmp = sys.argv[3] if len(sys.argv) > 3 else config['SETTINGS']['suffixe_tmp']
     # Vérifier que le fichier existe
     if not Path(pathPDF).exists():
         logger.debug(f"❌ Le fichier '{pathPDF}' n'existe pas")
