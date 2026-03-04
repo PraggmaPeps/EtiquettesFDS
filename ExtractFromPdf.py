@@ -472,7 +472,7 @@ def main():
 
         logger.info(f"\n📝 Final: {results}")
         sheetName=''
-        if (x := re.search("(.*)\.[PDF|pdf]", os.path.basename(pathPDF))):
+        if (x := re.search(r"(.*)\.pdf$", os.path.basename(pathPDF), re.IGNORECASE)):
             sheetName=x.group(1)
         #SI nom de fichie etiquette positionnée on va mettre à jour toutes les lignes qui font référence à ce FDS
         # Sinon on va créer un onglet dans pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
