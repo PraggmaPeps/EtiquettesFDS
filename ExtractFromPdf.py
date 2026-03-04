@@ -286,18 +286,26 @@ def update_sticker_file(fds , sheetName, fileSticker):
     indexAvertissement = get_column_index(ws, "Mention d'avertissement",exit_now=True)
     indexPrudence = get_column_index(ws, "Conseils de prudence",exit_now=True)
     indexContient = get_column_index(ws, "Contient",exit_now=True)
+    indexModele = get_column_index(ws, "Modèle d'étiquette",exit_now=True)
 
     for i in range(2, ws.max_row + 1):
         rowfdsname = ws.cell(row=i, column=indexFds + 1).value
         logger.debug(f"Try to recognize{sheetName} in {rowfdsname}")
         if (ws.cell(row=i, column=indexFds + 1).value == sheetName):
+            nb_pictos_sticker = 3
+            Model = ws.cell(row=i, column=indexModele + 1).value
+            if (match := re.search(r'(\d+)',Model)):
+                nb_pictos_sticker = int(match[1])
             if ('pictos' in fds):
                 j=1
                 for picto in fds['pictos']:
                     indexPicto = get_column_index(ws,f"PICTO {j}",exit_now=True)
                     ws.cell(i, indexPicto + 1 ).value = picto
                     j = j + 1
-
+                for k in range(j, nb_pictos_sticker + 1):
+                    indexPicto = get_column_index(ws, f"PICTO {j}", exit_now=True)
+                    ws.cell(i, indexPicto + 1).value = config['SETTINGS']['black_picto']
+                    j = j + 1
             avertissement= ''
             if 'avertissement' in fds:
                 avertissement =  fds['avertissement']
@@ -333,7 +341,7 @@ def update_sticker_file(fds , sheetName, fileSticker):
 def write_fds(fds , sheetName):
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        wb = load_workbook(os.path.join(script_dir,config['PATH']['pathFdsExcel']))
+        wb = load_workbook(os.path.join(script_dir,config['PATHS']['pathFdsExcel']))
     except Exception as e:
         wb=Workbook()
     if (sheetName in wb.sheetnames):
@@ -394,7 +402,7 @@ def write_fds(fds , sheetName):
                 ws['B' + str(currentLine)] = dictMention[complement]
             currentLine += 1
 
-    wb.save(config['PATH']['pathFdsExcel'])
+    wb.save(config['PATHS']['pathFdsExcel'])
 def fromFileifVar(code):
     global mentionInFile
     result = dictMention[code]
@@ -435,9 +443,9 @@ def main():
     pathPDF = sys.argv[1]
     logger.debug(f"Traitement du fichier PDF....: {pathPDF}")
     global dictMention
-    logger.debug(f"Chargement du distionnaire depuis : {config['PATH']['pathMention']}")
+    logger.debug(f"Chargement du distionnaire depuis : {config['PATHS']['pathMention']}")
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    dictMention = excel_to_dict(os.path.join(script_dir,config['PATH']['pathMention']))
+    dictMention = excel_to_dict(os.path.join(script_dir,config['PATHS']['pathMention']))
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
@@ -472,7 +480,7 @@ def main():
             logger.debug(f"Report fds in file etiquette {fileSticker}")
             update_sticker_file(results, sheetName, fileSticker)
         else:
-            logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATH']['pathFdsExcel']}")
+            logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATHS']['pathFdsExcel']}")
             write_fds(results,sheetName)
     else:
         logger.error("❌ Aucun texte n'a pu être extrait")

@@ -1,6 +1,8 @@
 import logging
 import os
-from datetime import datetime, time
+
+import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 from config import config
 
@@ -8,7 +10,7 @@ def setup_logger(name):
     """Configure un logger propre pour votre script"""
     # Créer le dossier logs
     script_dir = Path(__file__).parent
-    log_dir = os.path.join(script_dir, config['PATH']['log_dir'])
+    log_dir = os.path.join(script_dir, config['PATHS']['log_dir'])
     os.makedirs(log_dir, exist_ok=True)
 
     purge_old_logs(log_dir)
@@ -42,8 +44,8 @@ def setup_logger(name):
 
 def purge_old_logs(log_dir):
     """Supprime les fichiers .log de plus de X jours."""
-    days = config['SETTINGS']['nb_days_purge_log']
-    limit = time.time() - (days * 86400)  # 86400 = secondes par jour
+    nb_days = int(config['SETTINGS']['nb_days_purge_log'])
+    limit = (datetime.now() - timedelta(days=nb_days)).timestamp()  # ✅ converti en float
 
     for log_file in Path(log_dir).glob("*.log"):
         if log_file.stat().st_mtime < limit:
