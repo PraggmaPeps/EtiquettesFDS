@@ -4,6 +4,7 @@ Script d'extraction de texte depuis un PDF avec pdfplumber
 """
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from config import config
@@ -273,9 +274,11 @@ def extraire_tableaux_pdf(pathPDF):
         return []
 
 
-def update_sticker_file(fds , sheetName, fileSticker):
+def update_sticker_file(fds , sheetName, fileSticker,key='yyy'):
     try:
-        wb = load_workbook(fileSticker)
+        fileStickerTmp = re.sub(r'\.xlsm$',"_"+key+".xlsm",fileSticker)
+        shutil.copy(fileSticker, fileStickerTmp)
+        wb = load_workbook(fileStickerTmp)
     except Exception as e:
         print(f"Erreur : {e}", file=sys.stderr)
         sys.exit(1)
@@ -438,7 +441,7 @@ def main():
     pictogrammes_identifies=[]
 
     if len(sys.argv) < 2:
-        logger.error("Usage: python extract_pdf.py <pathPDF> [<fichier_etiq.xls>]")
+        logger.error("Usage: python extract_pdf.py <pathPDF> [<fichier_etiq.xls>] [key_tmp]")
         sys.exit(1)
     pathPDF = sys.argv[1]
     logger.debug(f"Traitement du fichier PDF....: {pathPDF}")
@@ -449,7 +452,7 @@ def main():
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
-
+    key_tmp = sys.argv[3] if len(sys.argv) > 2 else config['SETTINGS']['suffixe_tmp']
     # Vérifier que le fichier existe
     if not Path(pathPDF).exists():
         logger.debug(f"❌ Le fichier '{pathPDF}' n'existe pas")
@@ -478,7 +481,7 @@ def main():
         # Sinon on va créer un onglet dans pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
         if fileSticker and not fileSticker == "":
             logger.debug(f"Report fds in file etiquette {fileSticker}")
-            update_sticker_file(results, sheetName, fileSticker)
+            update_sticker_file(results, sheetName, fileSticker,key_tmp)
         else:
             logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATHS']['pathFdsExcel']}")
             write_fds(results,sheetName)
