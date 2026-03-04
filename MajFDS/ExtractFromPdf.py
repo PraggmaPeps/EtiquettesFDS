@@ -274,14 +274,11 @@ def extraire_tableaux_pdf(pathPDF):
         return []
 
 
-def update_sticker_file(fds , sheetName, fileSticker,key='yyy'):
+def update_sticker_file(fds , sheetName, fileSticker, pathResultXls):
     try:
-        file_name  = os.path.basename(fileSticker)
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        file_name_tmp = re.sub(r'\.xlsm$',"_"+key+".xlsm",file_name)
-        work_dir = config['PATHS'].get('workDir', 'Work')
-        fileStickerTmp = os.path.join(script_dir,work_dir,file_name_tmp)
-
+        fileStickerTmp = os.path.join(script_dir,pathResultXls)
+        logger.error(f"copy {fileSticker} to {fileStickerTmp}")
         shutil.copy(fileSticker, fileStickerTmp)
         wb = load_workbook(fileStickerTmp)
     except Exception as e:
@@ -457,7 +454,7 @@ def main():
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
-    key_tmp = sys.argv[3] if len(sys.argv) > 3 else config['SETTINGS']['suffixe_tmp']
+    pathResultXls  = sys.argv[3] if len(sys.argv) > 3 else config['PATHS']['pathResultXls']
     # Vérifier que le fichier existe
     if not Path(pathPDF).exists():
         logger.debug(f"❌ Le fichier '{pathPDF}' n'existe pas")
@@ -486,7 +483,7 @@ def main():
         # Sinon on va créer un onglet dans pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
         if fileSticker and not fileSticker == "":
             logger.debug(f"Report fds in file etiquette {fileSticker}")
-            update_sticker_file(results, sheetName, fileSticker,key_tmp)
+            update_sticker_file(results, sheetName, fileSticker,pathResultXls)
         else:
             logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATHS']['pathFdsExcel']}")
             write_fds(results,sheetName)
