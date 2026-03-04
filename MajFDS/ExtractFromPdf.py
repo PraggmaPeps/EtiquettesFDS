@@ -345,7 +345,7 @@ def update_sticker_file(fds , sheetName, fileSticker,key='yyy'):
 
             ws.cell(row=i, column=indexContient + 1).value = mentionContient
 
-    wb.save(fileSticker)
+    wb.save(fileStickerTmp)
 def write_fds(fds , sheetName):
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
