@@ -4,7 +4,7 @@ import os
 import datetime
 from datetime import datetime,timedelta
 from pathlib import Path
-from config import config
+from MajFDS.config import config
 
 def setup_logger(name):
     """Configure un logger propre pour votre script"""

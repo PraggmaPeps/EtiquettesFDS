@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from config import config
+from MajFDS.config import config
 import pdfplumber
 
 from Excel_utils import get_column_index
