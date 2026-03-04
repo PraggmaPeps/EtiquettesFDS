@@ -13,6 +13,8 @@ import anthropic
 import sys
 from pathlib import Path
 import logging
+import configparser
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dictionnaire des pictogrammes de danger SGH/CLP
@@ -44,7 +46,8 @@ def extraire_images_pdf(pathPDF, page_debut=0, page_fin=2):
     images_extraites = []
 
     print(f"📄 Extraction des images de {pathPDF}...")
-
+    config = configparser.ConfigParser()
+    config.read('config.ini')
     with pdfplumber.open(pathPDF) as pdf:
         nb_pages = min(len(pdf.pages), page_fin + 1)
 
@@ -102,7 +105,9 @@ def identifier_pictogramme_claude(image_pil):
         image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
         # Créer le client Claude
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(
+            api_key=config['ANTHROPIC']['api_key']
+        )
 
         # Prompt spécialisé pour les pictogrammes de danger
         prompt = """Analyse cette image et détermine s'il s'agit d'un pictogramme de danger SGH/CLP/GHS.

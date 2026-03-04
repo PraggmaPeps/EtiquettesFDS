@@ -468,7 +468,7 @@ def main():
         logger.info(f"\n📝 Extracted: {results}")
         if results['pictos'] == []:
             logger.info("No pictos named ... Try to find out from pictures ")
-            if (bool(config['SETTINGS']['RECOGNIZE_PICTURES'])):
+            if (bool(config['SETTINGS'].getboolean(['RECOGNIZE_PICTURES']))):
                 pictogrammes_identifies = analyser_fds(pathPDF)
             for picto in pictogrammes_identifies:
                 logger.info(f"picto from imùage {picto}")
