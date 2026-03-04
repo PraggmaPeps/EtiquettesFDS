@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from MajFDS.config import config
+from config import config
 import pdfplumber
 
 from Excel_utils import get_column_index
@@ -276,7 +276,12 @@ def extraire_tableaux_pdf(pathPDF):
 
 def update_sticker_file(fds , sheetName, fileSticker,key='yyy'):
     try:
-        fileStickerTmp = re.sub(r'\.xlsm$',"_"+key+".xlsm",fileSticker)
+        file_name  = os.path.basename(fileSticker)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        file_name_tmp = re.sub(r'\.xlsm$',"_"+key+".xlsm",file_name)
+        work_dir = config['PATHS'].get('workDir', 'Work')
+        fileStickerTmp = os.path.join(script_dir,work_dir,file_name_tmp)
+
         shutil.copy(fileSticker, fileStickerTmp)
         wb = load_workbook(fileStickerTmp)
     except Exception as e:
