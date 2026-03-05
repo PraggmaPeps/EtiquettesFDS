@@ -6,18 +6,19 @@ import os
 import re
 import shutil
 import sys
+from setup_logger import setup_logger
+logger = setup_logger(__name__)
+from Excel_utils import get_column_index
+
 from pathlib import Path
 from config import config
 import pdfplumber
 
-from Excel_utils import get_column_index
+
 
 from ExcelToDict import excel_to_dict
 from openpyxl import load_workbook
 from openpyxl import Workbook
-from setup_logger import setup_logger
-
-logger = setup_logger(__name__)
 # Configuration basique du logger
 
 
@@ -274,17 +275,14 @@ def extraire_tableaux_pdf(pathPDF):
         return []
 
 
-def update_sticker_file(fds , sheetName, fileSticker, pathResultXls):
+def update_sticker_file(fds , sheetName, fileSticker):
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        fileStickerTmp = os.path.join(script_dir,pathResultXls)
-        logger.error(f"copy {fileSticker} to {fileStickerTmp}")
-        shutil.copy(fileSticker, fileStickerTmp)
-        wb = load_workbook(fileStickerTmp)
+        wb = load_workbook(fileSticker)
+        ws = wb.worksheets[0]
     except Exception as e:
         print(f"Erreur : {e}", file=sys.stderr)
         sys.exit(1)
-    ws = wb.worksheets[0]
+
 
     indexFds = get_column_index(ws, "FDS",exit_now=True)
     indexDanger = get_column_index(ws, "Mentions de danger",exit_now=True)
@@ -342,7 +340,7 @@ def update_sticker_file(fds , sheetName, fileSticker, pathResultXls):
 
             ws.cell(row=i, column=indexContient + 1).value = mentionContient
 
-    wb.save(fileStickerTmp)
+    wb.save(fileSticker)
 def write_fds(fds , sheetName):
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -443,7 +441,7 @@ def main():
     pictogrammes_identifies=[]
 
     if len(sys.argv) < 2:
-        logger.error("Usage: python extract_pdf.py <pathPDF> [<fichier_etiq.xls>] [key_tmp]")
+        logger.error("Usage: python extract_pdf.py <pathPDF> [<fichier_etiq.xls>]")
         sys.exit(1)
     pathPDF = sys.argv[1]
     logger.debug(f"Traitement du fichier PDF....: {pathPDF}")
@@ -454,7 +452,6 @@ def main():
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
-    pathResultXls  = sys.argv[3] if len(sys.argv) > 3 else config['PATHS']['pathResultXls']
     # Vérifier que le fichier existe
     if not Path(pathPDF).exists():
         logger.debug(f"❌ Le fichier '{pathPDF}' n'existe pas")
@@ -484,7 +481,7 @@ def main():
         # Sinon on va créer un onglet dans pathFdsExcel="Datas/FdsExcelNoAPI.xlsx"
         if fileSticker and not fileSticker == "":
             logger.debug(f"Report fds in file etiquette {fileSticker}")
-            update_sticker_file(results, sheetName, fileSticker,pathResultXls)
+            update_sticker_file(results, sheetName, fileSticker)
         else:
             logger.debug(f"Report fds in file sheet {sheetName} of file {config['PATHS']['pathFdsExcel']}")
             write_fds(results,sheetName)

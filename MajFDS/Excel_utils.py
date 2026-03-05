@@ -1,5 +1,13 @@
 # excel_utils.py
+import os
 import sys
+import openpyxl
+import logging
+
+
+from copy import copy
+
+
 def get_column_index(ws, column_name, exit_now = False,header_row=1):
     """
     Retourne l'index (0-based) de la colonne correspondant à column_name,
@@ -15,7 +23,7 @@ def get_column_index(ws, column_name, exit_now = False,header_row=1):
         if cell.value == column_name:
             return col
     if exit_now:
-        print(f"Col {column_name} not found")
+        logger.error(f"Col {column_name} not found")
         sys.exit(1)
     return -1
 
