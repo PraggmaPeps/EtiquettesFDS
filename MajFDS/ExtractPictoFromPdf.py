@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 import logging
 import configparser
-
+from config import config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Dictionnaire des pictogrammes de danger SGH/CLP
@@ -103,10 +103,10 @@ def identifier_pictogramme_claude(image_pil):
         buffer = io.BytesIO()
         image_pil.save(buffer, format='PNG')
         image_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
-
+        anthropic_key = config['API']['anthropic_key']
         # Créer le client Claude
         client = anthropic.Anthropic(
-            api_key=config['ANTHROPIC']['api_key']
+            api_key = anthropic_key
         )
 
         # Prompt spécialisé pour les pictogrammes de danger
