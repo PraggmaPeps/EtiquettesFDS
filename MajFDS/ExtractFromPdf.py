@@ -107,7 +107,7 @@ def extraire_texte_pdf(pathPDF):
                             logger.debug(f"interest True due to :{ligne}")
                             interest =True
                         if (interest):
-                            logger.debug(f"interest True")
+                            logger.debug(f"interest True interestPicto {interestPicto}")
                             if (t := re.search('PICTO', ligne,re.IGNORECASE)):
                                 logger.debug(f"Picto =>  {t}")
                                 interestPicto = MIN_LINES_WITHOUT_INFORMATIONS
@@ -143,11 +143,15 @@ def extraire_texte_pdf(pathPDF):
                                         avertissement = y.group(2)
                             if (x := re.search("danger", ligne)):
                                 interestDanger=MIN_LINES_WITHOUT_INFORMATIONS
+                                logger.debug(f"interestDanger set to {interestDanger}")
                             if (interestDanger):
                                 dangers_tmp=(re.findall(r'EUH\d+[A]?|H\d+', ligne))
                                 if (dangers_tmp):
+                                    logger.debug(f"dangers _tmp {dangers_tmp}")
                                     interestDanger = MIN_LINES_WITHOUT_INFORMATIONS
                                     toadds = clean_mention(dangers_tmp)
+                                    logger.debug(f"to_adds {toadds}")
+                                    logger.debug(f"to_adds {toadds}")
                                     for element in toadds:
                                         if (not re.search(r'^EUH',element)):
                                             if not element in dangers:
@@ -156,17 +160,24 @@ def extraire_texte_pdf(pathPDF):
 
                                 else:
                                     interestDanger-=1
+                                    logger.debug(f"interestDanger set to {interestDanger}")
                             if (expectContient):
                                 pattern = re.compile(r'[^A-Za-z0-9, :\-_()\'éèà/]+')
                                 contient = pattern.sub('', ligne)
+                                tmp = re.split(r' *: *',contient)
+                                if (len(tmp) > 1):
+                                    logger.debug(f"Contient|Composants dangereux tmp {tmp}")
+                                    contient=tmp[1]
                                 contient = re.sub(r'^ +','',contient)
                                 if contient:
                                     contients.append(contient)
                                     expectContient=False
                             if ((re.search("(Contient|Composants dangereux)", ligne, re.IGNORECASE))):
+                                logger.debug("Contient|Composants dangereux")
                                 tmp = re.split(r' *: *',ligne)
-                                contient=tmp[1]
-                                if (contient):
+                                if (len(tmp) > 1):
+                                    logger.debug(f"Contient|Composants dangereux tmp {tmp}")
+                                    contient=tmp[1]
                                     contients.append(tmp[1])
                                 else:
                                     expectContient=True
@@ -404,8 +415,8 @@ def write_fds(fds , sheetName):
             if (complement in dictMention):
                 ws['B' + str(currentLine)] = dictMention[complement]
             currentLine += 1
-
-    wb.save(config['PATHS']['pathFdsExcel'])
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    wb.save(os.path.join(script_dir,config['PATHS']['pathFdsExcel']))
 def fromFileifVar(code):
     global mentionInFile
     result = dictMention[code]
