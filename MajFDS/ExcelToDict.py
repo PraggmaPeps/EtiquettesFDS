@@ -5,6 +5,7 @@ VERSION SIMPLE - Lire Excel et créer un dictionnaire
 import sys
 
 import pandas as pd
+from numpy.ma.core import append
 
 
 def excel_to_dict(fichier_excel, feuille=0):
@@ -50,6 +51,48 @@ def excel_to_dict(fichier_excel, feuille=0):
     return dictionnaire
 
 
+def excel_to_dict_array(fichier_excel, feuille=0):
+    """
+    Version simple et directe mais qui instancie un tableau de valeurs associé à une clé
+
+    Args:
+        fichier_excel: Chemin vers le fichier Excel
+        feuille: Index (0, 1, 2...) ou nom de la feuille
+
+    Returns:
+        dict: {cle_sans_espaces: [valeurs]}
+    """
+
+    # Lire le fichier Excel
+    df = pd.read_excel(fichier_excel, sheet_name=feuille)
+
+    # Créer le dictionnaire
+    dictionnaire = {}
+
+    # Parcourir chaque ligne
+    for index, row in df.iterrows():
+        # Colonne 0 = clé
+        cle = row.iloc[0]
+
+        # Ignorer si vide
+        if pd.isna(cle) or str(cle).strip() == '':
+            continue
+
+        # Nettoyer la clé (enlever espaces)
+        cle_clean = str(cle).replace(' ', '')
+
+        # Colonne 1 = valeur
+        valeur = row.iloc[1]
+
+        # Convertir NaN en None
+        if pd.isna(valeur):
+            valeur = None
+        if (cle_clean not in dictionnaire):
+            dictionnaire[cle_clean] = [valeur]
+        else:
+            # Ajouter au dictionnaire
+            dictionnaire[cle_clean].append(valeur)
+    return dictionnaire
 
 # ============================================
 # VERSION AVEC NETTOYAGE AVANCÉ

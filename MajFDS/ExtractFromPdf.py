@@ -16,7 +16,7 @@ import pdfplumber
 
 
 
-from ExcelToDict import excel_to_dict
+from ExcelToDict import excel_to_dict, excel_to_dict_array
 from openpyxl import load_workbook
 from openpyxl import Workbook
 # Configuration basique du logger
@@ -24,13 +24,13 @@ from openpyxl import Workbook
 
 from ExtractPictoFromPdf import analyser_fds
 MAX_PAGES_TO_SCAN = 50
-MIN_LINES_WITHOUT_INFORMATIONS = 10
+MIN_LINES_WITHOUT_INFORMATIONS = 15
 #To call external API to recognize picto from pictures
 
 
 dictMention = {}
 mentionInFile= {}
-
+dictOccMentionVar = {}
 
 def extraire_texte_pdf(pathPDF):
     global mentionInFile
@@ -46,7 +46,7 @@ def extraire_texte_pdf(pathPDF):
     texte_complet = []
     logger.debug("extraire_texte_pdf......")
     try:
-        with pdfplumber.open(pathPDF) as pdf:
+        with (pdfplumber.open(pathPDF) as pdf):
             logger.debug(f"📄 Nombre de pages: {len(pdf.pages)}")
             numParaph=''
             interest = False
@@ -166,21 +166,28 @@ def extraire_texte_pdf(pathPDF):
                                 contient = pattern.sub('', ligne)
                                 tmp = re.split(r' *: *',contient)
                                 if (len(tmp) > 1):
-                                    logger.debug(f"Contient|Composants dangereux tmp {tmp}")
-                                    contient=tmp[1]
-                                contient = re.sub(r'^ +','',contient)
-                                if contient:
+                                    if tmp[0] == '':
+                                        logger.debug(f"suite Contient {tmp}")
+                                        contient_tmp += ' ' + tmp[1]
+                                else:
+                                    contient = re.sub(r'^ +','',contient)
+                                    contient_tmp += ' ' + contient
+                                if contient_tmp and len(contient_tmp) > 3:
+                                    contient = re.sub(r'\s+', ' ', contient_tmp)
+                                    logger.debug(f"append contients '{contient}'")
                                     contients.append(contient)
                                     expectContient=False
                             if ((re.search("(Contient|Composants dangereux)", ligne, re.IGNORECASE))):
                                 logger.debug("Contient|Composants dangereux")
+                                expectContient=True
+                                contient_tmp=''
                                 tmp = re.split(r' *: *',ligne)
                                 if (len(tmp) > 1):
                                     logger.debug(f"Contient|Composants dangereux tmp {tmp}")
                                     contient=tmp[1]
-                                    contients.append(tmp[1])
-                                else:
-                                    expectContient=True
+                                    if (len (contient) > 3):
+                                        contient_tmp= contient
+                                        logger.debug(f"append contients : '{contient}'")
 
                             if ((re.search("(indications|informations) (compl|suppl)", ligne, re.IGNORECASE)) or
                                 (re.search("Phrases EUH", ligne, re.IGNORECASE)) or
@@ -205,7 +212,6 @@ def extraire_texte_pdf(pathPDF):
                                 logger.debug(f"Prudence {ligne}")
                             if (interestPrudence):
                                 logger.debug(f"...Prudence {interestPrudence}.... {ligne}")
-
                                 prudences_tmp=(re.findall(r'P\d+', ligne))
                                 if (prudences_tmp):
                                     toadds=clean_mention(prudences_tmp)
@@ -218,7 +224,7 @@ def extraire_texte_pdf(pathPDF):
                                     interestPrudence=MIN_LINES_WITHOUT_INFORMATIONS
                                 else:
                                     if last_prudence:
-                                        mentionInFile[last_prudence]+= ligne
+                                        mentionInFile[last_prudence]+= ' ' + ligne
                                     interestPrudence-=1
                         prevLine=ligne
                     else:
@@ -301,7 +307,7 @@ def update_sticker_file(fds , sheetName, fileSticker):
     indexPrudence = get_column_index(ws, "Conseils de prudence",exit_now=True)
     indexContient = get_column_index(ws, "Contient",exit_now=True)
     indexModele = get_column_index(ws, "Modèle d'étiquette",exit_now=True)
-
+    indexComplement = get_column_index(ws, "Indications complémentaires",exit_now=True)
     for i in range(2, ws.max_row + 1):
         rowfdsname = ws.cell(row=i, column=indexFds + 1).value
         logger.debug(f"Try to recognize{sheetName} in {rowfdsname}")
@@ -327,15 +333,15 @@ def update_sticker_file(fds , sheetName, fileSticker):
 
             mentionDanger = ''
             if ('dangers' in fds):
-                sep = ''
+                sep = 'Mentions de danger : '
                 for danger in fds['dangers']:
-                    mentionDanger = sep + mentionDanger + danger + " " + dictMention[danger]
+                    mentionDanger = sep + mentionDanger + danger + " " + nettoyer_balises(dictMention[danger])
                     sep = ' '
             ws.cell(row=i, column=indexDanger + 1).value = mentionDanger
 
             mentionPrudence = ''
             if ('prudences' in fds):
-                sep = ''
+                sep = 'Conseils de prudence :'
                 for prudence in fds['prudences']:
                     mentionToApply = fromFileifVar(prudence)
                     mentionPrudence = sep + mentionPrudence + prudence + " " + mentionToApply
@@ -344,12 +350,21 @@ def update_sticker_file(fds , sheetName, fileSticker):
 
             mentionContient = ''
             if ('contients' in fds):
-                sep = ''
+                sep = 'Le produit contient : '
                 for contient in fds['contients']:
                     mentionContient = sep + mentionContient + contient
                     sep = ' '
-
             ws.cell(row=i, column=indexContient + 1).value = mentionContient
+
+            mentionComplement = ''
+            if ('complements' in fds):
+                sep = 'Mentions complémentaires : '
+                for complement in fds['complements']:
+                    mentionComplement = sep + mentionComplement + complement + nettoyer_balises(dictMention[complement])
+                    sep = ' '
+            ws.cell(row=i, column=indexComplement + 1).value = mentionComplement
+
+
 
     wb.save(fileSticker)
 def write_fds(fds , sheetName):
@@ -418,25 +433,110 @@ def write_fds(fds , sheetName):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     wb.save(os.path.join(script_dir,config['PATHS']['pathFdsExcel']))
 def fromFileifVar(code):
+    # Traite les codes variables de prudence avec LE catrctère '…'
+    # Si '…' on essaie de voir si dans le texte qui suit on trouve le caractère '.' (point centré verticalement, début de paragraphe)
+    # Si oui on considère que la mention est jusqu'à ce point et qu'elle mérite de figurer dans OccurenceMentionLegalesVariables.xlsx
+    # si non on cherche à matcher avec une de ces mentions déjà existentes
+    isResultConsideredAsSure = False
     global mentionInFile
     result = dictMention[code]
+    logger.debug(f"fromFileifVar {code} {result}")
+
     if not '…' in result:
         return result
     if (not code in mentionInFile):
         logger.error(f"{code} contains '…'not and not in mentionInFile")
         return result
-    match = re.search(rf'{code}\s+(.*)', mentionInFile[code])
+    cleanMention = re.sub(r'\s+', ' ', mentionInFile[code])
+    match = re.search(rf'{code}[\s-]+(.*)', cleanMention)
     if match:
         logger.debug(f"{code} in file seems to value {match.group(1)}")
-        result = match.group(1)  # "
+        result = match.group(1)
         matchEnd = re.search(r'^([^·]+)·(.*)',result)
         if matchEnd:
             logger.debug(f"{code} set to {matchEnd.group(1)}")
             result = matchEnd.group(1)
+            isResultConsideredAsSure = True
+            addVarMention(code,result)
+        if not isResultConsideredAsSure:
+            matchEnd = re.search(r'^(.+?)(\d+)(.*)', result)
+            if matchEnd:
+                logger.debug(f"{code} set to {matchEnd.group(1)}")
+                result = matchEnd.group(1)
+            result = getVarMention(code,result)
         return result
     else:
         logger.error(f"{code} contains '…' and code not in {mentionInFile[code]}")
         return result
+def getVarMention(code,result):
+    logger.debug(f"getVarMention {code}, {result}")
+    global dictOccMentionVar
+    if code in dictOccMentionVar:
+        valeurs = dictOccMentionVar[code]
+        for valeur in valeurs:
+            logger.debug(f"valeur {valeur} startwith ?  {result}")
+            if valeur.startswith(result):
+                logger.debug(f"getVarMention {code}, {result} STARTWITH => {valeur}")
+                return valeur
+    logger.debug(f"getVarMention {code}, {result} => {result}")
+    return result
+
+def addVarMention(code,result):
+    global dictOccMentionVar
+    isAlreadyKnown = False
+    logger.debug(f"addVarMention {code}, {result}")
+    if code in dictOccMentionVar:
+        valeurs = dictOccMentionVar[code]
+        for valeur in valeurs:
+            logger.debug(f"valeur {valeur}")
+            if valeur == result:
+                isAlreadyKnown = True
+        if not isAlreadyKnown:
+            dictOccMentionVar[code].append(result)
+            updateVarMentionFile()
+    else:
+        logger.debug(f"nex code {code} valeur {result}")
+        dictOccMentionVar[code] = [result]
+        updateVarMentionFile()
+    return result
+def updateVarMentionFile():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    pathVarMentionFile = os.path.join(script_dir,config['PATHS']['pathOccMentionVar'])
+    logger.debug(f"updateVarMentionFile()")
+    global dictOccMentionVar
+    try:
+        if os.path.exists(pathVarMentionFile):
+            wb = load_workbook(pathVarMentionFile)
+
+        else:
+            wb =Workbook()
+        ws = wb.worksheets[0]
+        ws['A1'] = 'Code'
+        ws['B1'] = 'Value'
+        currentLine=2
+        for code in dictOccMentionVar:
+            valeurs = dictOccMentionVar[code]
+            for valeur in valeurs:
+                ws['A'+str(currentLine)] = code
+                ws['B'+str(currentLine)] = valeur
+                currentLine+=1
+
+        wb.save(pathVarMentionFile)
+    except Exception as e:
+        print(f"Erreur : {e}", file=sys.stderr)
+        sys.exit(1)
+def nettoyer_balises(texte):
+    if not texte:
+        return texte
+
+    texte = re.sub(r'<[^>]*>', '', texte)
+    # Nettoyer les espaces multiples
+    texte = re.sub(r'\s+', ' ', texte)
+    # Supprimer les espaces avant la ponctuation (., ,, ;, :, !, ?)
+    texte = re.sub(r'\s+([.,;:!?])', r'\1', texte)
+    # Trim (supprimer espaces début/fin)
+    return texte.strip()
+
 
 def incrementer_section(match):
     """Incrémenter le dernier chiffre d'une section"""
@@ -457,9 +557,17 @@ def main():
     pathPDF = sys.argv[1]
     logger.debug(f"Traitement du fichier PDF....: {pathPDF}")
     global dictMention
+    global dictOccMentionVar
     logger.debug(f"Chargement du distionnaire depuis : {config['PATHS']['pathMention']}")
     script_dir = os.path.dirname(os.path.abspath(__file__))
     dictMention = excel_to_dict(os.path.join(script_dir,config['PATHS']['pathMention']))
+    if os.path.exists(os.path.join(script_dir,config['PATHS']['pathOccMentionVar'])):
+        logger.debug(f"Load value from {os.path.join(script_dir,config['PATHS']['pathOccMentionVar'])}")
+        dictOccMentionVar = excel_to_dict_array(os.path.join(script_dir,config['PATHS']['pathOccMentionVar']))
+        for key in dictOccMentionVar.keys():
+            logger.debug(f"{key}")
+            for valeur in dictOccMentionVar[key]:
+                logger.debug(f"{key} {valeur}")
 
 
     fileSticker = sys.argv[2] if len(sys.argv) > 2 else ""
